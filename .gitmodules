@@ -1,3 +1,4 @@
 [submodule "moco-frontend"]
 	path = moco-frontend
 	url = https://github.com/fabiolucasz/moco-frontend.git
+	branch = main
