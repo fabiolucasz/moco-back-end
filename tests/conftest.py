@@ -4,7 +4,9 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+import src.modules.accounts.models  # noqa: F401
 import src.modules.identity.models  # noqa: F401
+import src.modules.transactions.models  # noqa: F401
 from src.core.database import Base, get_db_session
 from src.main import app
 

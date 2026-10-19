@@ -173,7 +173,6 @@ class AuthService:
 
         return payload
 
-
     @classmethod
     async def authenticate_google(cls, db: AsyncSession, id_token: str) -> tuple[User, str, str]:
         """Authenticates or signs up a user via Google OAuth."""

@@ -6,7 +6,9 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+import src.modules.accounts.models  # noqa: F401
 import src.modules.identity.models  # noqa: F401
+import src.modules.transactions.models  # noqa: F401
 from src.config import get_settings
 from src.core.database import Base
 
