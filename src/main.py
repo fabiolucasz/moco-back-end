@@ -11,6 +11,7 @@ from src.core.exceptions import register_exception_handlers
 from src.core.logging import setup_logging
 from src.core.middleware import register_middlewares
 from src.modules.accounts.router import router as accounts_router
+from src.modules.analytics.router import router as analytics_router
 from src.modules.identity.router import router as auth_router
 from src.modules.transactions.router import categories_router, transactions_router
 
@@ -56,6 +57,7 @@ def create_app() -> FastAPI:
     app.include_router(accounts_router, prefix="/api/v1")
     app.include_router(categories_router, prefix="/api/v1")
     app.include_router(transactions_router, prefix="/api/v1")
+    app.include_router(analytics_router, prefix="/api/v1")
 
     @app.get("/health", tags=["Health"], status_code=status.HTTP_200_OK)
     async def health_check() -> dict[str, Any]:
