@@ -10,6 +10,7 @@ from src.core.database import engine
 from src.core.exceptions import register_exception_handlers
 from src.core.logging import setup_logging
 from src.core.middleware import register_middlewares
+from src.modules.identity.router import router as auth_router
 
 settings = get_settings()
 
@@ -47,6 +48,9 @@ def create_app() -> FastAPI:
     # Global middlewares and error handling
     register_middlewares(app)
     register_exception_handlers(app)
+
+    # API Routers
+    app.include_router(auth_router, prefix="/api/v1")
 
     @app.get("/health", tags=["Health"], status_code=status.HTTP_200_OK)
     async def health_check() -> dict[str, Any]:

@@ -73,9 +73,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     """Registers standard JSON error response handlers for domain and HTTP exceptions."""
 
     @app.exception_handler(EntityNotFoundError)
-    async def entity_not_found_handler(
-        request: Request, exc: EntityNotFoundError
-    ) -> JSONResponse:
+    async def entity_not_found_handler(request: Request, exc: EntityNotFoundError) -> JSONResponse:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={"error": {"code": exc.code, "message": exc.message, "details": exc.details}},
@@ -108,7 +106,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         request: Request, exc: BusinessRuleValidationError
     ) -> JSONResponse:
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={"error": {"code": exc.code, "message": exc.message, "details": exc.details}},
         )
 
@@ -117,7 +115,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={
                 "error": {
                     "code": "REQUEST_VALIDATION_ERROR",
@@ -126,3 +124,4 @@ def register_exception_handlers(app: FastAPI) -> None:
                 }
             },
         )
+
