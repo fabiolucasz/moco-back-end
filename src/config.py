@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # CORS
+    # Production‑ready CORS whitelist – add any additional front‑end origins here
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
         "http://localhost:8081",

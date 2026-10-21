@@ -1,26 +1,23 @@
 FROM python:3.12-slim
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    build-essential \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
 
 # Install uv for fast dependency management
 COPY --from=ghcr.io/astral-sh/uv:0.5.26 /uv /uvx /bin/
 
-WORKDIR /app
-
 # Copy dependency files first for layer caching
-COPY pyproject.toml README.md ./
+COPY pyproject.toml ./
 
-# Install dependencies into system environment
-RUN uv pip install --system -e ".[dev]"
+# Install dependencies (without dev dependencies for production)
+RUN uv pip install --system -e .
 
 # Copy source code
 COPY . .
 
+# Create entrypoint script
+RUN echo '#!/bin/sh\nalembic upgrade head\nexec uvicorn src.main:app --host 0.0.0.0 --port 8000' > /app/entrypoint.sh && \
+    chmod +x /app/entrypoint.sh
+
 EXPOSE 8000
 
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["/app/entrypoint.sh"]

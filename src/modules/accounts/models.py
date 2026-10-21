@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Uuid, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Uuid, func, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.core.database import Base
@@ -55,6 +55,23 @@ class FinancialAccount(Base):
         Boolean,
         default=True,
         nullable=False,
+    )
+    # Pluggy Open Finance integration fields
+    pluggy_connector_id: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+    pluggy_item_id: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+    pluggy_account_id: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+    pluggy_metadata: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
