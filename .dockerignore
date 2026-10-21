@@ -68,6 +68,9 @@ Dockerfile
 docker-compose.yml
 .dockerignore
 
+# Entrypoint script
+!entrypoint.sh
+
 # CI/CD
 .github/
 .gitlab-ci.yml
