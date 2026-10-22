@@ -44,6 +44,9 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - DEBUG=${DEBUG:-true}
+      - PLUGGY_API_KEY=${PLUGGY_API_KEY}
+      - PLUGGY_API_SECRET=${PLUGGY_API_SECRET}
+      - PLUGGY_CLIENT_ID=${PLUGGY_CLIENT_ID}
     volumes:
       - .:/app
     depends_on:
