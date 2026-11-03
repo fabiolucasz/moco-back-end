@@ -1,9 +1,11 @@
 FROM python:3.12-slim
 
-COPY . /app
+# Copy uv binary from official image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
+COPY . /app
 WORKDIR /app
-RUN pip install uv
+
 RUN uv sync
 
 # Make entrypoint executable
