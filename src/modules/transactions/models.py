@@ -175,3 +175,19 @@ class Transaction(Base):
         back_populates="transactions",
         lazy="selectin",
     )
+
+    @property
+    def category_name(self) -> str | None:
+        return self.category.name if self.category else None
+
+    @property
+    def category_icon(self) -> str | None:
+        return self.category.icon if self.category else None
+
+    @property
+    def category_color(self) -> str | None:
+        return self.category.color if self.category else None
+
+    @property
+    def account_name(self) -> str | None:
+        return self.account.name if self.account else None

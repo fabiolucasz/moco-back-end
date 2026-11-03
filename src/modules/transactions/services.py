@@ -2,11 +2,12 @@ import uuid
 from collections.abc import Sequence
 from datetime import date
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions import BusinessRuleValidationError, EntityNotFoundError
 from src.modules.accounts.models import FinancialAccount
+from src.modules.accounts.services import AccountService
 from src.modules.transactions.domain.enums import (
     CategoryType,
     TransactionOrigin,
@@ -16,6 +17,7 @@ from src.modules.transactions.domain.enums import (
 from src.modules.transactions.models import Transaction, TransactionCategory
 from src.modules.transactions.schemas import (
     CategoryCreate,
+    CategoryUpdate,
     TransactionCreate,
     TransactionUpdate,
 )
@@ -114,6 +116,55 @@ class CategoryService:
         await db.refresh(category)
         return category
 
+    @staticmethod
+    async def update_custom_category(
+        db: AsyncSession,
+        user_id: uuid.UUID,
+        category_id: uuid.UUID,
+        cat_update: CategoryUpdate,
+    ) -> TransactionCategory:
+        """Updates a custom category owned by the user."""
+        category = await db.get(TransactionCategory, category_id)
+        if not category or category.user_id != user_id:
+            raise EntityNotFoundError("Category not found or access denied")
+        if category.is_system_default:
+            raise BusinessRuleValidationError("Cannot modify system default categories")
+
+        if cat_update.name is not None:
+            category.name = cat_update.name.strip()
+        if cat_update.icon is not None:
+            category.icon = cat_update.icon
+        if cat_update.color is not None:
+            category.color = cat_update.color
+        if cat_update.type is not None:
+            category.type = cat_update.type.value
+
+        await db.commit()
+        await db.refresh(category)
+        return category
+
+    @staticmethod
+    async def delete_custom_category(
+        db: AsyncSession, user_id: uuid.UUID, category_id: uuid.UUID
+    ) -> None:
+        """Deletes a custom category and disassociates related transactions."""
+        category = await db.get(TransactionCategory, category_id)
+        if not category or category.user_id != user_id:
+            raise EntityNotFoundError("Category not found or access denied")
+        if category.is_system_default:
+            raise BusinessRuleValidationError("Cannot delete system default categories")
+
+        # Disassociate transactions using this category
+        stmt = (
+            update(Transaction)
+            .where(Transaction.category_id == category_id, Transaction.user_id == user_id)
+            .values(category_id=None)
+        )
+        await db.execute(stmt)
+
+        await db.delete(category)
+        await db.commit()
+
 
 class TransactionService:
     """Service handling transactions with atomic balance updates and multi-tenant isolation."""
@@ -147,10 +198,15 @@ class TransactionService:
         cls, db: AsyncSession, user_id: uuid.UUID, tx_in: TransactionCreate
     ) -> Transaction:
         """Creates a transaction and atomically updates account balances."""
-        # Validate account ownership
-        account = await db.get(FinancialAccount, tx_in.account_id)
-        if not account or account.user_id != user_id or not account.is_active:
-            raise EntityNotFoundError("Source account not found or access denied")
+        # Validate account ownership or assign user default account
+        if tx_in.account_id is None:
+            account = await AccountService.get_or_create_default_account(db, user_id)
+            source_account_id = account.id
+        else:
+            account = await db.get(FinancialAccount, tx_in.account_id)
+            if not account or account.user_id != user_id or not account.is_active:
+                raise EntityNotFoundError("Source account not found or access denied")
+            source_account_id = account.id
 
         dest_account: FinancialAccount | None = None
         if tx_in.type == TransactionType.TRANSFER:
@@ -169,7 +225,7 @@ class TransactionService:
         transaction = Transaction(
             id=uuid.uuid4(),
             user_id=user_id,
-            account_id=tx_in.account_id,
+            account_id=source_account_id,
             destination_account_id=tx_in.destination_account_id,
             category_id=tx_in.category_id,
             amount_cents=tx_in.amount_cents,
@@ -304,6 +360,14 @@ class TransactionService:
             )
 
         # 2. Update fields
+        target_account = account
+        if update_in.account_id is not None and update_in.account_id != tx.account_id:
+            new_acc = await db.get(FinancialAccount, update_in.account_id)
+            if not new_acc or new_acc.user_id != user_id or not new_acc.is_active:
+                raise EntityNotFoundError("New account not found or access denied")
+            tx.account_id = update_in.account_id
+            target_account = new_acc
+
         if update_in.category_id is not None:
             category = await db.get(TransactionCategory, update_in.category_id)
             if not category or (category.user_id is not None and category.user_id != user_id):
@@ -323,9 +387,9 @@ class TransactionService:
             tx.notes = update_in.notes
 
         # 3. Apply new balance effect
-        if account:
+        if target_account:
             cls._apply_balance_effect(
-                account=account,
+                account=target_account,
                 dest_account=dest_account,
                 tx_type=tx.type,
                 amount_cents=tx.amount_cents,

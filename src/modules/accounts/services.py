@@ -12,9 +12,42 @@ from src.modules.accounts.schemas import AccountCreate, AccountUpdate
 class AccountService:
     """Service handling accounts and cash wallet operations with multi-tenant isolation."""
 
-    @staticmethod
-    async def list_accounts(db: AsyncSession, user_id: uuid.UUID) -> Sequence[FinancialAccount]:
-        """Returns all active accounts owned by the given user."""
+    @classmethod
+    async def get_or_create_default_account(
+        cls, db: AsyncSession, user_id: uuid.UUID
+    ) -> FinancialAccount:
+        """Finds the first active account for the user or creates a default cash wallet."""
+        stmt = (
+            select(FinancialAccount)
+            .where(
+                FinancialAccount.user_id == user_id,
+                FinancialAccount.is_active.is_(True),
+            )
+            .order_by(FinancialAccount.created_at.asc())
+        )
+        account = await db.scalar(stmt)
+        if not account:
+            account = FinancialAccount(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                name="Carteira Principal",
+                account_type="cash_wallet",
+                balance_cents=0,
+                currency="BRL",
+                color="#10B981",
+                is_manual=True,
+                is_active=True,
+            )
+            db.add(account)
+            await db.commit()
+            await db.refresh(account)
+        return account
+
+    @classmethod
+    async def list_accounts(
+        cls, db: AsyncSession, user_id: uuid.UUID
+    ) -> Sequence[FinancialAccount]:
+        """Returns all active accounts owned by the given user (ensuring at least one default)."""
         stmt = (
             select(FinancialAccount)
             .where(
@@ -24,7 +57,11 @@ class AccountService:
             .order_by(FinancialAccount.created_at.asc())
         )
         result = await db.scalars(stmt)
-        return result.all()
+        accounts = result.all()
+        if not accounts:
+            default_acc = await cls.get_or_create_default_account(db, user_id)
+            return [default_acc]
+        return accounts
 
     @staticmethod
     async def get_account(

@@ -14,6 +14,7 @@ from src.modules.transactions.models import Transaction, TransactionCategory
 from src.modules.transactions.schemas import (
     CategoryCreate,
     CategoryResponse,
+    CategoryUpdate,
     TransactionCreate,
     TransactionResponse,
     TransactionUpdate,
@@ -59,6 +60,38 @@ async def create_category(
 ) -> TransactionCategory:
     """Creates a custom transaction category for the authenticated user."""
     return await CategoryService.create_custom_category(db, current_user.id, cat_in)
+
+
+@categories_router.put(
+    "/{category_id}",
+    response_model=CategoryResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update a custom personal category",
+)
+async def update_category(
+    category_id: uuid.UUID,
+    cat_update: CategoryUpdate,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> TransactionCategory:
+    """Updates a custom category owned by the authenticated user."""
+    return await CategoryService.update_custom_category(
+        db, current_user.id, category_id, cat_update
+    )
+
+
+@categories_router.delete(
+    "/{category_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a custom personal category",
+)
+async def delete_category(
+    category_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> None:
+    """Deletes a custom category and detaches transactions that use it."""
+    await CategoryService.delete_custom_category(db, current_user.id, category_id)
 
 
 # ==============================================================================

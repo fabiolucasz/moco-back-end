@@ -21,6 +21,15 @@ class CategoryCreate(BaseModel):
     parent_id: uuid.UUID | None = None
 
 
+class CategoryUpdate(BaseModel):
+    """Schema for updating a personal transaction category."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    icon: str | None = Field(default=None, max_length=50)
+    color: str | None = Field(default=None, max_length=7)
+    type: CategoryType | None = None
+
+
 class CategoryResponse(BaseModel):
     """Schema for category data response."""
 
@@ -38,7 +47,7 @@ class CategoryResponse(BaseModel):
 class TransactionCreate(BaseModel):
     """Schema for registering a new transaction."""
 
-    account_id: uuid.UUID
+    account_id: uuid.UUID | None = None
     destination_account_id: uuid.UUID | None = None
     category_id: uuid.UUID | None = None
     amount_cents: int = Field(..., gt=0, description="Amount in cents, must be positive")
@@ -54,7 +63,7 @@ class TransactionCreate(BaseModel):
         if self.type == TransactionType.TRANSFER:
             if not self.destination_account_id:
                 raise ValueError("destination_account_id is required for transfers")
-            if self.destination_account_id == self.account_id:
+            if self.account_id and self.destination_account_id == self.account_id:
                 raise ValueError("Source and destination accounts must be different")
         return self
 
@@ -62,6 +71,7 @@ class TransactionCreate(BaseModel):
 class TransactionUpdate(BaseModel):
     """Schema for updating an existing transaction."""
 
+    account_id: uuid.UUID | None = None
     category_id: uuid.UUID | None = None
     amount_cents: int | None = Field(default=None, gt=0)
     type: TransactionType | None = None
@@ -81,6 +91,10 @@ class TransactionResponse(BaseModel):
     account_id: uuid.UUID
     destination_account_id: uuid.UUID | None = None
     category_id: uuid.UUID | None = None
+    category_name: str | None = None
+    category_icon: str | None = None
+    category_color: str | None = None
+    account_name: str | None = None
     amount_cents: int
     type: str
     description: str

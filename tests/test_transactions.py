@@ -261,3 +261,86 @@ async def test_multi_tenant_transaction_security(client: AsyncClient) -> None:
     )
     assert eve_list.status_code == 200
     assert len(eve_list.json()) == 0
+
+
+@pytest.mark.asyncio
+async def test_category_custom_update_and_delete(client: AsyncClient) -> None:
+    """Verifies that custom categories can be updated and deleted, but system categories cannot."""
+    token = await _create_user_and_login(client, "cat.custom.user@finpilot.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Create custom category
+    create_res = await client.post(
+        "/api/v1/categories",
+        headers=headers,
+        json={"name": "Academia", "icon": "dumbbell", "color": "#10B981", "type": "expense"},
+    )
+    assert create_res.status_code == 201
+    cat_id = create_res.json()["id"]
+
+    # 2. Update custom category
+    update_res = await client.put(
+        f"/api/v1/categories/{cat_id}",
+        headers=headers,
+        json={"name": "Crossfit & Natação", "color": "#059669"},
+    )
+    assert update_res.status_code == 200
+    assert update_res.json()["name"] == "Crossfit & Natação"
+    assert update_res.json()["color"] == "#059669"
+
+    # 3. Create a transaction using this category
+    tx_res = await client.post(
+        "/api/v1/transactions",
+        headers=headers,
+        json={
+            "amount_cents": 12000,
+            "type": "expense",
+            "description": "Mensalidade Crossfit",
+            "category_id": cat_id,
+        },
+    )
+    assert tx_res.status_code == 201
+    tx_id = tx_res.json()["id"]
+
+    # 4. Delete custom category
+    del_res = await client.delete(f"/api/v1/categories/{cat_id}", headers=headers)
+    assert del_res.status_code == 204
+
+    # 5. Verify transaction still exists with category_id set to None
+    tx_check = await client.get(f"/api/v1/transactions/{tx_id}", headers=headers)
+    assert tx_check.status_code == 200
+    assert tx_check.json()["category_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_transaction_update_and_auto_account(client: AsyncClient) -> None:
+    """Verifies that transactions can be created without explicit account_id and updated."""
+    token = await _create_user_and_login(client, "auto.acc.user@finpilot.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Create transaction without specifying account_id (system auto-creates default account)
+    tx_res = await client.post(
+        "/api/v1/transactions",
+        headers=headers,
+        json={
+            "amount_cents": 5000,
+            "type": "expense",
+            "description": "Lanche da tarde",
+            "transaction_date": "2026-10-20",
+        },
+    )
+    assert tx_res.status_code == 201
+    tx_data = tx_res.json()
+    assert tx_data["account_id"] is not None
+    assert tx_data["account_name"] == "Carteira Principal"
+
+    # 2. Update transaction amount and description
+    tx_id = tx_data["id"]
+    put_res = await client.put(
+        f"/api/v1/transactions/{tx_id}",
+        headers=headers,
+        json={"amount_cents": 7500, "description": "Lanche da tarde reforçado"},
+    )
+    assert put_res.status_code == 200
+    assert put_res.json()["amount_cents"] == 7500
+    assert put_res.json()["description"] == "Lanche da tarde reforçado"
