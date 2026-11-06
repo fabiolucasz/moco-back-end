@@ -1,6 +1,6 @@
 import uuid
 from collections.abc import Sequence
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -170,6 +170,25 @@ class TransactionService:
     """Service handling transactions with atomic balance updates and multi-tenant isolation."""
 
     @staticmethod
+    def _calculate_next_date(current_date: date, recurrence_type: str, interval: int) -> date:
+        """Calculates the next occurrence date based on recurrence type."""
+        if recurrence_type == "daily":
+            return current_date + timedelta(days=interval)
+        elif recurrence_type == "weekly":
+            return current_date + timedelta(weeks=interval)
+        elif recurrence_type == "monthly":
+            # Add months (simplified approach)
+            new_month = current_date.month + interval
+            year = current_date.year + (new_month - 1) // 12
+            month = (new_month - 1) % 12 + 1
+            # Handle day overflow (e.g., Jan 31 -> Feb 28/29)
+            day = min(current_date.day, 31 if month in [1, 3, 5, 7, 8, 10, 12] else 30 if month != 2 else 29 if year % 4 == 0 else 28)
+            return date(year, month, day)
+        elif recurrence_type == "yearly":
+            return date(current_date.year + interval, current_date.month, current_date.day)
+        return current_date
+
+    @staticmethod
     def _apply_balance_effect(
         account: FinancialAccount,
         dest_account: FinancialAccount | None,
@@ -197,7 +216,7 @@ class TransactionService:
     async def create_transaction(
         cls, db: AsyncSession, user_id: uuid.UUID, tx_in: TransactionCreate
     ) -> Transaction:
-        """Creates a transaction and atomically updates account balances."""
+        """Creates a transaction and atomically updates account balances. Handles recurring transactions."""
         # Validate account ownership or assign user default account
         if tx_in.account_id is None:
             account = await AccountService.get_or_create_default_account(db, user_id)
@@ -222,7 +241,8 @@ class TransactionService:
             if not category or (category.user_id is not None and category.user_id != user_id):
                 raise EntityNotFoundError("Category not found or access denied")
 
-        transaction = Transaction(
+        # Create parent transaction
+        parent_transaction = Transaction(
             id=uuid.uuid4(),
             user_id=user_id,
             account_id=source_account_id,
@@ -236,22 +256,128 @@ class TransactionService:
             status=tx_in.status.value,
             origin=TransactionOrigin.MANUAL.value,
             notes=tx_in.notes,
+            recurrence_type=tx_in.recurrence_type,
+            recurrence_interval=tx_in.recurrence_interval,
+            recurrence_count=tx_in.recurrence_count,
+            recurrence_end_date=tx_in.recurrence_end_date,
+            installment_number=tx_in.installment_number,
+            total_installments=tx_in.total_installments,
         )
 
-        # Apply balance impact
+        # Apply balance impact for parent
         cls._apply_balance_effect(
             account=account,
             dest_account=dest_account,
-            tx_type=transaction.type,
-            amount_cents=transaction.amount_cents,
-            status=transaction.status,
+            tx_type=parent_transaction.type,
+            amount_cents=parent_transaction.amount_cents,
+            status=parent_transaction.status,
             revert=False,
         )
 
-        db.add(transaction)
+        db.add(parent_transaction)
+        await db.flush()
+
+        # Create recurring child transactions if recurrence is specified
+        if tx_in.recurrence_type and tx_in.recurrence_type != "installments":
+            current_date = tx_in.transaction_date
+            interval = tx_in.recurrence_interval or 1
+            count = tx_in.recurrence_count or 1
+            end_date = tx_in.recurrence_end_date
+
+            occurrences_created = 0
+            while occurrences_created < count:
+                if end_date and current_date >= end_date:
+                    break
+
+                current_date = cls._calculate_next_date(current_date, tx_in.recurrence_type, interval)
+                occurrences_created += 1
+
+                if occurrences_created >= count:
+                    break
+
+                child_transaction = Transaction(
+                    id=uuid.uuid4(),
+                    user_id=user_id,
+                    account_id=source_account_id,
+                    destination_account_id=tx_in.destination_account_id,
+                    category_id=tx_in.category_id,
+                    amount_cents=tx_in.amount_cents,
+                    type=tx_in.type.value,
+                    description=tx_in.description.strip(),
+                    transaction_date=current_date,
+                    settlement_date=tx_in.settlement_date,
+                    status=tx_in.status.value,
+                    origin=TransactionOrigin.MANUAL.value,
+                    notes=tx_in.notes,
+                    recurrence_type=tx_in.recurrence_type,
+                    recurrence_interval=tx_in.recurrence_interval,
+                    recurrence_count=tx_in.recurrence_count,
+                    recurrence_end_date=tx_in.recurrence_end_date,
+                    parent_transaction_id=parent_transaction.id,
+                )
+
+                # Apply balance impact for child
+                cls._apply_balance_effect(
+                    account=account,
+                    dest_account=dest_account,
+                    tx_type=child_transaction.type,
+                    amount_cents=child_transaction.amount_cents,
+                    status=child_transaction.status,
+                    revert=False,
+                )
+
+                db.add(child_transaction)
+
+        # Create installments if specified
+        elif tx_in.recurrence_type == "installments" and tx_in.total_installments:
+            installment_amount = tx_in.amount_cents // tx_in.total_installments
+            remainder = tx_in.amount_cents % tx_in.total_installments
+
+            for i in range(1, tx_in.total_installments + 1):
+                installment_date = cls._calculate_next_date(tx_in.transaction_date, "monthly", i - 1)
+                installment_amount_adjusted = installment_amount + (remainder if i == tx_in.total_installments else 0)
+
+                if i == 1:
+                    # First installment is the parent transaction
+                    parent_transaction.amount_cents = installment_amount_adjusted
+                    parent_transaction.installment_number = i
+                    parent_transaction.total_installments = tx_in.total_installments
+                else:
+                    child_transaction = Transaction(
+                        id=uuid.uuid4(),
+                        user_id=user_id,
+                        account_id=source_account_id,
+                        destination_account_id=tx_in.destination_account_id,
+                        category_id=tx_in.category_id,
+                        amount_cents=installment_amount_adjusted,
+                        type=tx_in.type.value,
+                        description=tx_in.description.strip(),
+                        transaction_date=installment_date,
+                        settlement_date=tx_in.settlement_date,
+                        status=tx_in.status.value,
+                        origin=TransactionOrigin.MANUAL.value,
+                        notes=tx_in.notes,
+                        recurrence_type="installments",
+                        installment_number=i,
+                        total_installments=tx_in.total_installments,
+                        parent_transaction_id=parent_transaction.id,
+                    )
+
+                    # Apply balance impact for installment
+                    cls._apply_balance_effect(
+                        account=account,
+                        dest_account=dest_account,
+                        tx_type=child_transaction.type,
+                        amount_cents=child_transaction.amount_cents,
+                        status=child_transaction.status,
+                        revert=False,
+                    )
+
+                    db.add(child_transaction)
+
         await db.commit()
-        await db.refresh(transaction)
-        return transaction
+        await db.refresh(parent_transaction)
+        return parent_transaction
 
     @classmethod
     async def get_transaction(
@@ -338,7 +464,7 @@ class TransactionService:
         transaction_id: uuid.UUID,
         update_in: TransactionUpdate,
     ) -> Transaction:
-        """Updates a transaction, accurately reconciling account balances."""
+        """Updates a transaction, accurately reconciling account balances. Handles edit scope for recurring transactions."""
         tx = await cls.get_transaction(db, user_id, transaction_id)
 
         account = await db.get(FinancialAccount, tx.account_id)
@@ -348,54 +474,120 @@ class TransactionService:
             else None
         )
 
-        # 1. Revert existing balance effect
-        if account:
-            cls._apply_balance_effect(
-                account=account,
-                dest_account=dest_account,
-                tx_type=tx.type,
-                amount_cents=tx.amount_cents,
-                status=tx.status,
-                revert=True,
+        # Handle edit scope for recurring transactions
+        edit_scope = update_in.edit_scope or "single"
+        transactions_to_update = [tx]
+
+        if edit_scope == "future" and tx.parent_transaction_id:
+            # Get all child transactions with date >= current transaction date
+            stmt = (
+                select(Transaction)
+                .where(
+                    Transaction.parent_transaction_id == tx.parent_transaction_id,
+                    Transaction.transaction_date >= tx.transaction_date,
+                    Transaction.user_id == user_id,
+                )
+                .order_by(Transaction.transaction_date)
+            )
+            transactions_to_update = await db.scalars(stmt)
+            transactions_to_update = list(transactions_to_update)
+        elif edit_scope == "all" and tx.parent_transaction_id:
+            # Get all transactions in the recurrence group
+            stmt = (
+                select(Transaction)
+                .where(
+                    Transaction.parent_transaction_id == tx.parent_transaction_id,
+                    Transaction.user_id == user_id,
+                )
+                .order_by(Transaction.transaction_date)
+            )
+            transactions_to_update = await db.scalars(stmt)
+            transactions_to_update = list(transactions_to_update)
+        elif (edit_scope == "future" or edit_scope == "all") and not tx.parent_transaction_id:
+            # This is a parent transaction, get all children
+            stmt = (
+                select(Transaction)
+                .where(
+                    Transaction.parent_transaction_id == tx.id,
+                    Transaction.user_id == user_id,
+                )
+                .order_by(Transaction.transaction_date)
+            )
+            child_transactions = await db.scalars(stmt)
+            if edit_scope == "future":
+                transactions_to_update = [tx] + [t for t in child_transactions if t.transaction_date >= tx.transaction_date]
+            else:
+                transactions_to_update = [tx] + list(child_transactions)
+
+        # Update each transaction in scope
+        for current_tx in transactions_to_update:
+            current_account = await db.get(FinancialAccount, current_tx.account_id)
+            current_dest_account = (
+                await db.get(FinancialAccount, current_tx.destination_account_id)
+                if current_tx.destination_account_id
+                else None
             )
 
-        # 2. Update fields
-        target_account = account
-        if update_in.account_id is not None and update_in.account_id != tx.account_id:
-            new_acc = await db.get(FinancialAccount, update_in.account_id)
-            if not new_acc or new_acc.user_id != user_id or not new_acc.is_active:
-                raise EntityNotFoundError("New account not found or access denied")
-            tx.account_id = update_in.account_id
-            target_account = new_acc
+            # 1. Revert existing balance effect
+            if current_account:
+                cls._apply_balance_effect(
+                    account=current_account,
+                    dest_account=current_dest_account,
+                    tx_type=current_tx.type,
+                    amount_cents=current_tx.amount_cents,
+                    status=current_tx.status,
+                    revert=True,
+                )
 
-        if update_in.category_id is not None:
-            category = await db.get(TransactionCategory, update_in.category_id)
-            if not category or (category.user_id is not None and category.user_id != user_id):
-                raise EntityNotFoundError("Category not found or access denied")
-            tx.category_id = update_in.category_id
-        if update_in.amount_cents is not None:
-            tx.amount_cents = update_in.amount_cents
-        if update_in.type is not None:
-            tx.type = update_in.type.value
-        if update_in.description is not None:
-            tx.description = update_in.description.strip()
-        if update_in.transaction_date is not None:
-            tx.transaction_date = update_in.transaction_date
-        if update_in.status is not None:
-            tx.status = update_in.status.value
-        if update_in.notes is not None:
-            tx.notes = update_in.notes
+            # 2. Update fields
+            target_account = current_account
+            if update_in.account_id is not None and update_in.account_id != current_tx.account_id:
+                new_acc = await db.get(FinancialAccount, update_in.account_id)
+                if not new_acc or new_acc.user_id != user_id or not new_acc.is_active:
+                    raise EntityNotFoundError("New account not found or access denied")
+                current_tx.account_id = update_in.account_id
+                target_account = new_acc
 
-        # 3. Apply new balance effect
-        if target_account:
-            cls._apply_balance_effect(
-                account=target_account,
-                dest_account=dest_account,
-                tx_type=tx.type,
-                amount_cents=tx.amount_cents,
-                status=tx.status,
-                revert=False,
-            )
+            if update_in.category_id is not None:
+                category = await db.get(TransactionCategory, update_in.category_id)
+                if not category or (category.user_id is not None and category.user_id != user_id):
+                    raise EntityNotFoundError("Category not found or access denied")
+                current_tx.category_id = update_in.category_id
+            if update_in.amount_cents is not None:
+                current_tx.amount_cents = update_in.amount_cents
+            if update_in.type is not None:
+                current_tx.type = update_in.type.value
+            if update_in.description is not None:
+                current_tx.description = update_in.description.strip()
+            if update_in.transaction_date is not None:
+                current_tx.transaction_date = update_in.transaction_date
+            if update_in.status is not None:
+                current_tx.status = update_in.status.value
+            if update_in.notes is not None:
+                current_tx.notes = update_in.notes
+            if update_in.recurrence_type is not None:
+                current_tx.recurrence_type = update_in.recurrence_type
+            if update_in.recurrence_interval is not None:
+                current_tx.recurrence_interval = update_in.recurrence_interval
+            if update_in.recurrence_count is not None:
+                current_tx.recurrence_count = update_in.recurrence_count
+            if update_in.recurrence_end_date is not None:
+                current_tx.recurrence_end_date = update_in.recurrence_end_date
+            if update_in.installment_number is not None:
+                current_tx.installment_number = update_in.installment_number
+            if update_in.total_installments is not None:
+                current_tx.total_installments = update_in.total_installments
+
+            # 3. Apply new balance effect
+            if target_account:
+                cls._apply_balance_effect(
+                    account=target_account,
+                    dest_account=current_dest_account,
+                    tx_type=current_tx.type,
+                    amount_cents=current_tx.amount_cents,
+                    status=current_tx.status,
+                    revert=False,
+                )
 
         await db.commit()
         await db.refresh(tx)

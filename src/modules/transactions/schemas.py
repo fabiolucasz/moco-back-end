@@ -57,6 +57,12 @@ class TransactionCreate(BaseModel):
     settlement_date: date | None = None
     status: TransactionStatus = TransactionStatus.CONFIRMED
     notes: str | None = None
+    recurrence_type: str | None = Field(default=None, description="Type of recurrence: daily, weekly, monthly, yearly, installments")
+    recurrence_interval: int | None = Field(default=None, description="Interval between occurrences")
+    recurrence_count: int | None = Field(default=None, description="Number of occurrences")
+    recurrence_end_date: date | None = Field(default=None, description="End date for recurrence")
+    installment_number: int | None = Field(default=None, description="Current installment number")
+    total_installments: int | None = Field(default=None, description="Total number of installments")
 
     @model_validator(mode="after")
     def validate_transfer_accounts(self) -> "TransactionCreate":
@@ -79,6 +85,13 @@ class TransactionUpdate(BaseModel):
     transaction_date: date | None = None
     status: TransactionStatus | None = None
     notes: str | None = None
+    recurrence_type: str | None = None
+    recurrence_interval: int | None = None
+    recurrence_count: int | None = None
+    recurrence_end_date: date | None = None
+    installment_number: int | None = None
+    total_installments: int | None = None
+    edit_scope: str | None = Field(default=None, description="Edit scope: single, future, all")
 
 
 class TransactionResponse(BaseModel):
@@ -104,4 +117,11 @@ class TransactionResponse(BaseModel):
     origin: str = TransactionOrigin.MANUAL.value
     external_id: str | None = None
     notes: str | None = None
+    recurrence_type: str | None = None
+    recurrence_interval: int | None = None
+    recurrence_count: int | None = None
+    recurrence_end_date: date | None = None
+    parent_transaction_id: uuid.UUID | None = None
+    installment_number: int | None = None
+    total_installments: int | None = None
     created_at: datetime

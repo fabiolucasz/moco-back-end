@@ -148,6 +148,35 @@ class Transaction(Base):
         Text,
         nullable=True,
     )
+    recurrence_type: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+    recurrence_interval: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+    recurrence_count: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+    recurrence_end_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
+    parent_transaction_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("transactions.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    installment_number: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+    total_installments: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -173,6 +202,17 @@ class Transaction(Base):
     category: Mapped[TransactionCategory | None] = relationship(
         "TransactionCategory",
         back_populates="transactions",
+        lazy="selectin",
+    )
+    parent_transaction: Mapped["Transaction | None"] = relationship(
+        "Transaction",
+        remote_side="Transaction.id",
+        back_populates="child_transactions",
+        lazy="selectin",
+    )
+    child_transactions: Mapped[list["Transaction"]] = relationship(
+        "Transaction",
+        back_populates="parent_transaction",
         lazy="selectin",
     )
 
