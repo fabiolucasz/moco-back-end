@@ -1,7 +1,8 @@
 from functools import lru_cache
 from typing import Literal
+import os
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -40,6 +41,32 @@ class Settings(BaseSettings):
     DB_ECHO: bool = False
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def set_database_url(cls, v: str, info) -> str:
+        """Set database URL based on environment if not explicitly provided."""
+        # If DATABASE_URL is explicitly set in env, use it
+        if v and v != "postgresql+asyncpg://finpilot_user:finpilot_password@localhost:5432/finpilot_db":
+            return v
+        
+        # Otherwise, set based on environment
+        environment = info.data.get("ENVIRONMENT", "development")
+        
+        if environment == "production":
+            # Use PROD_DATABASE_URL from environment if available
+            prod_db_url = os.getenv("PROD_DATABASE_URL")
+            if prod_db_url:
+                return prod_db_url
+            # Fallback
+            return "postgresql+asyncpg://finpilot_user:finpilot_password@localhost:5432/finpilot_prod"
+        elif environment == "testing":
+            return "postgresql+asyncpg://finpilot_user:finpilot_password@localhost:5432/finpilot_test"
+        elif environment == "staging":
+            return "postgresql+asyncpg://finpilot_user:finpilot_password@localhost:5432/finpilot_staging"
+        else:
+            # Development
+            return "postgresql+asyncpg://finpilot_user:finpilot_password@localhost:5432/finpilot_dev"
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
