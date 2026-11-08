@@ -1,0 +1,85 @@
+name: Deploy FinPilot AWS Infrastructure with Terraform
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # Permite que o GitHub gere o token OIDC
+  contents: read    # Necessário para actions/checkout
+
+jobs:
+  terraform-deploy:
+    name: Terraform Init and Deploy
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      # 1. Checkout do código
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Autenticação na AWS via OIDC
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      # 3. Setup do Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      # 4. Inicializa o Terraform
+      - name: Terraform Init
+        run: terraform init
+
+      # 6. Validação dos arquivos Terraform
+      - name: Terraform Validate
+        run: terraform validate
+
+      # 7. Planejamento das alterações passando os Secrets como variáveis do Terraform
+      - name: Terraform Plan
+        env:
+          TF_VAR_database_url: ${{ secrets.DATABASE_URL }}
+          TF_VAR_scheme: ${{ secrets.SCHEME }}
+          TF_VAR_db_user: ${{ secrets.USER }}
+          TF_VAR_db_password: ${{ secrets.PASSWORD }}
+          TF_VAR_db_host: ${{ secrets.HOST }}
+          TF_VAR_db_port: ${{ secrets.PORT }}
+          TF_VAR_database_name: ${{ secrets.DATABASE_NAME }}
+          TF_VAR_secret_key: ${{ secrets.SECRET_KEY }}
+          TF_VAR_algorithm: ${{ secrets.ALGORITHM }}
+          TF_VAR_access_token_expire_minutes: ${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
+          TF_VAR_refresh_token_expire_days: ${{ secrets.REFRESH_TOKEN_EXPIRE_DAYS }}
+          TF_VAR_domain: ${{ secrets.DOMAIN }}
+          TF_VAR_environment: production
+          TF_VAR_redis_url: ${{ secrets.REDIS_URL }}
+          TF_VAR_google_client_id: ${{ secrets.GOOGLE_CLIENT_ID }}
+          TF_VAR_google_client_secret: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: terraform plan
+
+      # 8. Aplicação da infraestrutura (VPC, Security Group, EC2 e .env)
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main'
+        env:
+          TF_VAR_database_url: ${{ secrets.DATABASE_URL }}
+          TF_VAR_scheme: ${{ secrets.SCHEME }}
+          TF_VAR_db_user: ${{ secrets.USER }}
+          TF_VAR_db_password: ${{ secrets.PASSWORD }}
+          TF_VAR_db_host: ${{ secrets.HOST }}
+          TF_VAR_db_port: ${{ secrets.PORT }}
+          TF_VAR_database_name: ${{ secrets.DATABASE_NAME }}
+          TF_VAR_secret_key: ${{ secrets.SECRET_KEY }}
+          TF_VAR_algorithm: ${{ secrets.ALGORITHM }}
+          TF_VAR_access_token_expire_minutes: ${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
+          TF_VAR_refresh_token_expire_days: ${{ secrets.REFRESH_TOKEN_EXPIRE_DAYS }}
+          TF_VAR_domain: ${{ secrets.DOMAIN }}
+          TF_VAR_environment: production
+          TF_VAR_redis_url: ${{ secrets.REDIS_URL }}
+          TF_VAR_google_client_id: ${{ secrets.GOOGLE_CLIENT_ID }}
+          TF_VAR_google_client_secret: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: terraform apply -auto-approve
