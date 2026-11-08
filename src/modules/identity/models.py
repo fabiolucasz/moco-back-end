@@ -124,11 +124,13 @@ class RefreshTokenSession(Base):
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
+        index=True,
     )
     is_revoked: Mapped[bool] = mapped_column(
         Boolean,
         default=False,
         nullable=False,
+        index=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

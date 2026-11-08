@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import get_settings
@@ -25,6 +25,16 @@ def _hash_token(raw_token: str) -> str:
 
 class AuthService:
     """Authentication and Identity domain services."""
+
+    @staticmethod
+    async def cleanup_expired_sessions(db: AsyncSession) -> None:
+        """Deletes expired and revoked refresh token sessions."""
+        now = datetime.now(UTC)
+        stmt = delete(RefreshTokenSession).where(
+            (RefreshTokenSession.expires_at < now) | (RefreshTokenSession.is_revoked.is_(True))
+        )
+        await db.execute(stmt)
+        await db.commit()
 
     @staticmethod
     async def register_user(db: AsyncSession, user_in: UserCreate) -> User:
@@ -79,6 +89,8 @@ class AuthService:
         cls, db: AsyncSession, login_in: LoginRequest
     ) -> tuple[User, str, str]:
         """Authenticates user with email and password and creates a new session."""
+        await cls.cleanup_expired_sessions(db)
+
         stmt = select(User).where(User.email == login_in.email.lower().strip())
         user = await db.scalar(stmt)
 
@@ -101,6 +113,8 @@ class AuthService:
     @classmethod
     async def refresh_session(cls, db: AsyncSession, refresh_token: str) -> tuple[str, str, User]:
         """Validates refresh token, invalidates current session, and issues a rotated pair."""
+        await cls.cleanup_expired_sessions(db)
+
         token_hash = _hash_token(refresh_token)
         now = datetime.now(UTC)
 
@@ -176,6 +190,8 @@ class AuthService:
     @classmethod
     async def authenticate_google(cls, db: AsyncSession, id_token: str) -> tuple[User, str, str]:
         """Authenticates or signs up a user via Google OAuth."""
+        await cls.cleanup_expired_sessions(db)
+
         google_payload = await cls.verify_google_id_token(id_token)
         google_sub = str(google_payload.get("sub"))
         email = str(google_payload.get("email", "")).lower().strip()
