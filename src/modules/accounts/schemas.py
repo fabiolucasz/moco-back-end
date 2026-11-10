@@ -39,32 +39,5 @@ class AccountResponse(BaseModel):
     color: str
     is_manual: bool
     is_active: bool
-    pluggy_connector_id: str | None = None
-    pluggy_item_id: str | None = None
-    pluggy_account_id: str | None = None
     created_at: datetime
     updated_at: datetime
-
-
-class PluggyConnectTokenRequest(BaseModel):
-    """Schema for requesting a Pluggy connect token."""
-
-    connector_id: str = Field(..., description="Pluggy connector ID")
-    options: dict[str, Any] | None = Field(default=None, description="Additional options")
-
-
-class PluggyConnectTokenResponse(BaseModel):
-    """Schema for Pluggy connect token response."""
-
-    connect_token: str
-    widget_url: str | None = None
-
-
-class PluggyConnectorResponse(BaseModel):
-    """Schema for Pluggy connector response."""
-
-    id: str
-    name: str
-    country: str
-    logo: str | None = None
-    category: str | None = None

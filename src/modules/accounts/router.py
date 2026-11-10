@@ -7,14 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_db_session
 from src.modules.accounts.models import FinancialAccount
-from src.modules.accounts.pluggy_service import pluggy_service
 from src.modules.accounts.schemas import (
     AccountCreate,
     AccountResponse,
     AccountUpdate,
-    PluggyConnectTokenRequest,
-    PluggyConnectTokenResponse,
-    PluggyConnectorResponse,
 )
 from src.modules.accounts.services import AccountService
 from src.modules.identity.dependencies import get_current_active_user
@@ -95,39 +91,3 @@ async def delete_account(
 ) -> None:
     """Deactivates an account verifying user ownership."""
     await AccountService.deactivate_account(db, current_user.id, account_id)
-
-
-# Pluggy Open Finance endpoints
-@router.get(
-    "/pluggy/connectors",
-    response_model=list[PluggyConnectorResponse],
-    status_code=status.HTTP_200_OK,
-    summary="List available Pluggy connectors (banks)",
-)
-async def list_pluggy_connectors(
-    current_user: Annotated[User, Depends(get_current_active_user)],
-) -> list[dict]:
-    """Retrieves all available bank connectors from Pluggy."""
-    return await pluggy_service.get_connectors()
-
-
-@router.post(
-    "/pluggy/connect-token",
-    response_model=PluggyConnectTokenResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Create a Pluggy connect token for the widget",
-)
-async def create_pluggy_connect_token(
-    request: PluggyConnectTokenRequest,
-    current_user: Annotated[User, Depends(get_current_active_user)],
-) -> dict:
-    """Creates a connect token to initialize the Pluggy widget."""
-    result = await pluggy_service.create_connect_token(
-        connector_id=request.connector_id,
-        user_id=str(current_user.id),
-        options=request.options,
-    )
-    return {
-        "connect_token": result.get("apiKey"),
-        "widget_url": result.get("widgetUrl"),
-    }
