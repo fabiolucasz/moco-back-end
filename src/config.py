@@ -23,6 +23,23 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     PORT: int = 8000
     HOST: str = "0.0.0.0"
+    
+    # Redis
+    REDIS_URL: str = "redis://localhost:6379/0"
+
+    # CORS
+    # Production‑ready CORS whitelist – add any additional front‑end origins here
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:8081",
+        "http://localhost:19006",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8081",
+    ]
+
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str | None = None
+    GOOGLE_CLIENT_SECRET: str | None = None
 
     # Security
     SECRET_KEY: str = Field(
@@ -67,23 +84,6 @@ class Settings(BaseSettings):
         else:
             # Development
             return "postgresql+asyncpg://finpilot_user:finpilot_password@localhost:5432/finpilot_dev"
-
-    # Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
-
-    # CORS
-    # Production‑ready CORS whitelist – add any additional front‑end origins here
-    CORS_ORIGINS: list[str] = [
-        "http://localhost:3000",
-        "http://localhost:8081",
-        "http://localhost:19006",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:8081",
-    ]
-
-    # Google OAuth
-    GOOGLE_CLIENT_ID: str | None = None
-    GOOGLE_CLIENT_SECRET: str | None = None
 
 
 @lru_cache
