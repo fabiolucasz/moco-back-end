@@ -36,15 +36,40 @@ SYSTEM_CATEGORIES = [
     {"name": "Saúde", "icon": "heart", "color": "#10B981", "type": "expense"},
     {"name": "Educação", "icon": "book", "color": "#8B5CF6", "type": "expense"},
     {"name": "Lazer", "icon": "film", "color": "#EC4899", "type": "expense"},
-    {"name": "Assinaturas", "icon": "refresh-cw", "color": "#6366F1", "type": "expense"},
+    {
+        "name": "Assinaturas",
+        "icon": "refresh-cw",
+        "color": "#6366F1",
+        "type": "expense",
+    },
     {"name": "Compras", "icon": "shopping-bag", "color": "#14B8A6", "type": "expense"},
     {"name": "Impostos", "icon": "file-text", "color": "#6B7280", "type": "expense"},
-    {"name": "Investimentos", "icon": "trending-up", "color": "#059669", "type": "expense"},
+    {
+        "name": "Investimentos",
+        "icon": "trending-up",
+        "color": "#059669",
+        "type": "expense",
+    },
     # Income
     {"name": "Salário", "icon": "briefcase", "color": "#10B981", "type": "income"},
-    {"name": "Renda Extra", "icon": "plus-circle", "color": "#34D399", "type": "income"},
-    {"name": "Rendimentos", "icon": "dollar-sign", "color": "#059669", "type": "income"},
-    {"name": "Outras Receitas", "icon": "arrow-down-circle", "color": "#6EE7B7", "type": "income"},
+    {
+        "name": "Renda Extra",
+        "icon": "plus-circle",
+        "color": "#34D399",
+        "type": "income",
+    },
+    {
+        "name": "Rendimentos",
+        "icon": "dollar-sign",
+        "color": "#059669",
+        "type": "income",
+    },
+    {
+        "name": "Outras Receitas",
+        "icon": "arrow-down-circle",
+        "color": "#6EE7B7",
+        "type": "income",
+    },
     # Transfer
     {"name": "Transferência", "icon": "repeat", "color": "#64748B", "type": "transfer"},
 ]
@@ -56,7 +81,9 @@ class CategoryService:
     @staticmethod
     async def seed_system_categories(db: AsyncSession) -> None:
         """Seeds default categories if not already present."""
-        stmt = select(TransactionCategory).where(TransactionCategory.is_system_default.is_(True))
+        stmt = select(TransactionCategory).where(
+            TransactionCategory.is_system_default.is_(True)
+        )
         existing = await db.scalars(stmt)
         if existing.first() is not None:
             return
@@ -91,7 +118,10 @@ class CategoryService:
         stmt = (
             select(TransactionCategory)
             .where(*conditions)
-            .order_by(TransactionCategory.is_system_default.desc(), TransactionCategory.name.asc())
+            .order_by(
+                TransactionCategory.is_system_default.desc(),
+                TransactionCategory.name.asc(),
+            )
         )
         result = await db.scalars(stmt)
         return result.all()
@@ -157,7 +187,9 @@ class CategoryService:
         # Disassociate transactions using this category
         stmt = (
             update(Transaction)
-            .where(Transaction.category_id == category_id, Transaction.user_id == user_id)
+            .where(
+                Transaction.category_id == category_id, Transaction.user_id == user_id
+            )
             .values(category_id=None)
         )
         await db.execute(stmt)
@@ -170,7 +202,9 @@ class TransactionService:
     """Service handling transactions with atomic balance updates and multi-tenant isolation."""
 
     @staticmethod
-    def _calculate_next_date(current_date: date, recurrence_type: str, interval: int) -> date:
+    def _calculate_next_date(
+        current_date: date, recurrence_type: str, interval: int
+    ) -> date:
         """Calculates the next occurrence date based on recurrence type."""
         if recurrence_type == "daily":
             return current_date + timedelta(days=interval)
@@ -182,10 +216,19 @@ class TransactionService:
             year = current_date.year + (new_month - 1) // 12
             month = (new_month - 1) % 12 + 1
             # Handle day overflow (e.g., Jan 31 -> Feb 28/29)
-            day = min(current_date.day, 31 if month in [1, 3, 5, 7, 8, 10, 12] else 30 if month != 2 else 29 if year % 4 == 0 else 28)
+            day = min(
+                current_date.day,
+                (
+                    31
+                    if month in [1, 3, 5, 7, 8, 10, 12]
+                    else 30 if month != 2 else 29 if year % 4 == 0 else 28
+                ),
+            )
             return date(year, month, day)
         elif recurrence_type == "yearly":
-            return date(current_date.year + interval, current_date.month, current_date.day)
+            return date(
+                current_date.year + interval, current_date.month, current_date.day
+            )
         return current_date
 
     @staticmethod
@@ -216,7 +259,10 @@ class TransactionService:
     async def create_transaction(
         cls, db: AsyncSession, user_id: uuid.UUID, tx_in: TransactionCreate
     ) -> Transaction:
-        """Creates a transaction and atomically updates account balances. Handles recurring transactions."""
+        """Creates a transaction and atomically updates account balances.
+
+        Handles recurring transactions.
+        """
         # Validate account ownership or assign user default account
         if tx_in.account_id is None:
             account = await AccountService.get_or_create_default_account(db, user_id)
@@ -230,15 +276,25 @@ class TransactionService:
         dest_account: FinancialAccount | None = None
         if tx_in.type == TransactionType.TRANSFER:
             if not tx_in.destination_account_id:
-                raise BusinessRuleValidationError("Transfer requires a destination account")
+                raise BusinessRuleValidationError(
+                    "Transfer requires a destination account"
+                )
             dest_account = await db.get(FinancialAccount, tx_in.destination_account_id)
-            if not dest_account or dest_account.user_id != user_id or not dest_account.is_active:
-                raise EntityNotFoundError("Destination account not found or access denied")
+            if (
+                not dest_account
+                or dest_account.user_id != user_id
+                or not dest_account.is_active
+            ):
+                raise EntityNotFoundError(
+                    "Destination account not found or access denied"
+                )
 
         # Validate category if provided
         if tx_in.category_id:
             category = await db.get(TransactionCategory, tx_in.category_id)
-            if not category or (category.user_id is not None and category.user_id != user_id):
+            if not category or (
+                category.user_id is not None and category.user_id != user_id
+            ):
                 raise EntityNotFoundError("Category not found or access denied")
 
         # Create parent transaction
@@ -289,7 +345,9 @@ class TransactionService:
                 if end_date and current_date >= end_date:
                     break
 
-                current_date = cls._calculate_next_date(current_date, tx_in.recurrence_type, interval)
+                current_date = cls._calculate_next_date(
+                    current_date, tx_in.recurrence_type, interval
+                )
                 occurrences_created += 1
 
                 if occurrences_created >= count:
@@ -334,8 +392,12 @@ class TransactionService:
             remainder = tx_in.amount_cents % tx_in.total_installments
 
             for i in range(1, tx_in.total_installments + 1):
-                installment_date = cls._calculate_next_date(tx_in.transaction_date, "monthly", i - 1)
-                installment_amount_adjusted = installment_amount + (remainder if i == tx_in.total_installments else 0)
+                installment_date = cls._calculate_next_date(
+                    tx_in.transaction_date, "monthly", i - 1
+                )
+                installment_amount_adjusted = installment_amount + (
+                    remainder if i == tx_in.total_installments else 0
+                )
 
                 if i == 1:
                     # First installment is the parent transaction
@@ -424,7 +486,9 @@ class TransactionService:
         if end_date is not None:
             stmt = stmt.where(Transaction.transaction_date <= end_date)
 
-        stmt = stmt.order_by(Transaction.transaction_date.desc(), Transaction.created_at.desc())
+        stmt = stmt.order_by(
+            Transaction.transaction_date.desc(), Transaction.created_at.desc()
+        )
         stmt = stmt.limit(limit).offset(offset)
         result = await db.scalars(stmt)
         return result.all()
@@ -464,15 +528,11 @@ class TransactionService:
         transaction_id: uuid.UUID,
         update_in: TransactionUpdate,
     ) -> Transaction:
-        """Updates a transaction, accurately reconciling account balances. Handles edit scope for recurring transactions."""
-        tx = await cls.get_transaction(db, user_id, transaction_id)
+        """Updates a transaction, accurately reconciling account balances.
 
-        account = await db.get(FinancialAccount, tx.account_id)
-        dest_account = (
-            await db.get(FinancialAccount, tx.destination_account_id)
-            if tx.destination_account_id
-            else None
-        )
+        Handles edit scope for recurring transactions.
+        """
+        tx = await cls.get_transaction(db, user_id, transaction_id)
 
         # Handle edit scope for recurring transactions
         edit_scope = update_in.edit_scope or "single"
@@ -503,7 +563,9 @@ class TransactionService:
             )
             transactions_to_update = await db.scalars(stmt)
             transactions_to_update = list(transactions_to_update)
-        elif (edit_scope == "future" or edit_scope == "all") and not tx.parent_transaction_id:
+        elif (
+            edit_scope == "future" or edit_scope == "all"
+        ) and not tx.parent_transaction_id:
             # This is a parent transaction, get all children
             stmt = (
                 select(Transaction)
@@ -515,7 +577,11 @@ class TransactionService:
             )
             child_transactions = await db.scalars(stmt)
             if edit_scope == "future":
-                transactions_to_update = [tx] + [t for t in child_transactions if t.transaction_date >= tx.transaction_date]
+                transactions_to_update = [tx] + [
+                    t
+                    for t in child_transactions
+                    if t.transaction_date >= tx.transaction_date
+                ]
             else:
                 transactions_to_update = [tx] + list(child_transactions)
 
@@ -541,7 +607,10 @@ class TransactionService:
 
             # 2. Update fields
             target_account = current_account
-            if update_in.account_id is not None and update_in.account_id != current_tx.account_id:
+            if (
+                update_in.account_id is not None
+                and update_in.account_id != current_tx.account_id
+            ):
                 new_acc = await db.get(FinancialAccount, update_in.account_id)
                 if not new_acc or new_acc.user_id != user_id or not new_acc.is_active:
                     raise EntityNotFoundError("New account not found or access denied")
@@ -550,7 +619,9 @@ class TransactionService:
 
             if update_in.category_id is not None:
                 category = await db.get(TransactionCategory, update_in.category_id)
-                if not category or (category.user_id is not None and category.user_id != user_id):
+                if not category or (
+                    category.user_id is not None and category.user_id != user_id
+                ):
                     raise EntityNotFoundError("Category not found or access denied")
                 current_tx.category_id = update_in.category_id
             if update_in.amount_cents is not None:

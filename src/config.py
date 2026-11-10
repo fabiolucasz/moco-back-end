@@ -1,6 +1,6 @@
+import os
 from functools import lru_cache
 from typing import Literal
-import os
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -19,11 +19,13 @@ class Settings(BaseSettings):
     # General
     PROJECT_NAME: str = "FinPilot API"
     VERSION: str = "0.1.0"
-    ENVIRONMENT: Literal["development", "testing", "staging", "production"] = "development"
+    ENVIRONMENT: Literal["development", "testing", "staging", "production"] = (
+        "development"
+    )
     DEBUG: bool = True
     PORT: int = 8000
     HOST: str = "0.0.0.0"
-    
+
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
 
@@ -64,12 +66,16 @@ class Settings(BaseSettings):
     def set_database_url(cls, v: str, info) -> str:
         """Set database URL based on environment if not explicitly provided."""
         # If DATABASE_URL is explicitly set in env, use it
-        if v and v != "postgresql+asyncpg://finpilot_user:finpilot_password@localhost:5432/finpilot_db":
+        if (
+            v
+            and v
+            != "postgresql+asyncpg://finpilot_user:finpilot_password@localhost:5432/finpilot_db"
+        ):
             return v
-        
+
         # Otherwise, set based on environment
         environment = info.data.get("ENVIRONMENT", "development")
-        
+
         if environment == "production":
             # Use PROD_DATABASE_URL from environment if available
             prod_db_url = os.getenv("PROD_DATABASE_URL")
