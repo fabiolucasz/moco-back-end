@@ -17,13 +17,19 @@ engine: AsyncEngine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DB_ECHO,
     pool_size=settings.DB_POOL_SIZE if "sqlite" not in settings.DATABASE_URL else None,
-    max_overflow=settings.DB_MAX_OVERFLOW if "sqlite" not in settings.DATABASE_URL else None,
+    max_overflow=(
+        settings.DB_MAX_OVERFLOW if "sqlite" not in settings.DATABASE_URL else None
+    ),
     future=True,
     # Disable prepared statement cache for pgbouncer compatibility
-    connect_args={
-        "statement_cache_size": 0,
-        "prepared_statement_cache_size": 0,
-    } if "postgresql" in settings.DATABASE_URL else {},
+    connect_args=(
+        {
+            "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0,
+        }
+        if "postgresql" in settings.DATABASE_URL
+        else {}
+    ),
 )
 
 async_session_factory = async_sessionmaker(

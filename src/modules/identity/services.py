@@ -31,7 +31,8 @@ class AuthService:
         """Deletes expired and revoked refresh token sessions."""
         now = datetime.now(UTC)
         stmt = delete(RefreshTokenSession).where(
-            (RefreshTokenSession.expires_at < now) | (RefreshTokenSession.is_revoked.is_(True))
+            (RefreshTokenSession.expires_at < now)
+            | (RefreshTokenSession.is_revoked.is_(True))
         )
         await db.execute(stmt)
         await db.commit()
@@ -71,7 +72,9 @@ class AuthService:
         """Generates an opaque refresh token, hashes it, and persists the session."""
         raw_refresh_token = secrets.token_hex(32)
         token_hash = _hash_token(raw_refresh_token)
-        expires_at = datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        expires_at = datetime.now(UTC) + timedelta(
+            days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+        )
 
         session = RefreshTokenSession(
             id=uuid.uuid4(),
@@ -111,7 +114,9 @@ class AuthService:
         return user, access_token, refresh_token
 
     @classmethod
-    async def refresh_session(cls, db: AsyncSession, refresh_token: str) -> tuple[str, str, User]:
+    async def refresh_session(
+        cls, db: AsyncSession, refresh_token: str
+    ) -> tuple[str, str, User]:
         """Validates refresh token, invalidates current session, and issues a rotated pair."""
         await cls.cleanup_expired_sessions(db)
 
@@ -147,7 +152,9 @@ class AuthService:
     async def revoke_session(db: AsyncSession, refresh_token: str) -> None:
         """Revokes a refresh token session."""
         token_hash = _hash_token(refresh_token)
-        stmt = select(RefreshTokenSession).where(RefreshTokenSession.token_hash == token_hash)
+        stmt = select(RefreshTokenSession).where(
+            RefreshTokenSession.token_hash == token_hash
+        )
         session = await db.scalar(stmt)
         if session:
             session.is_revoked = True
@@ -159,7 +166,11 @@ class AuthService:
         # Support deterministic testing mock tokens
         if id_token.startswith("mock_google_token_"):
             parts = id_token.split("_")
-            mock_email = f"{parts[-1]}@gmail.com" if len(parts) > 3 else "google.user@example.com"
+            mock_email = (
+                f"{parts[-1]}@gmail.com"
+                if len(parts) > 3
+                else "google.user@example.com"
+            )
             return {
                 "sub": f"google-sub-{mock_email}",
                 "email": mock_email,
@@ -177,18 +188,25 @@ class AuthService:
                     raise UnauthorizedError("Invalid Google ID token")
                 payload = res.json()
         except httpx.RequestError as err:
-            raise UnauthorizedError("Failed to communicate with Google authentication") from err
+            raise UnauthorizedError(
+                "Failed to communicate with Google authentication"
+            ) from err
 
         if not isinstance(payload, dict):
             raise UnauthorizedError("Invalid Google response format")
 
-        if settings.GOOGLE_CLIENT_ID and payload.get("aud") != settings.GOOGLE_CLIENT_ID:
+        if (
+            settings.GOOGLE_CLIENT_ID
+            and payload.get("aud") != settings.GOOGLE_CLIENT_ID
+        ):
             raise UnauthorizedError("Google token audience mismatch")
 
         return payload
 
     @classmethod
-    async def authenticate_google(cls, db: AsyncSession, id_token: str) -> tuple[User, str, str]:
+    async def authenticate_google(
+        cls, db: AsyncSession, id_token: str
+    ) -> tuple[User, str, str]:
         """Authenticates or signs up a user via Google OAuth."""
         await cls.cleanup_expired_sessions(db)
 

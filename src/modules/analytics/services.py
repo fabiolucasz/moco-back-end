@@ -55,7 +55,9 @@ class DashboardService:
                 raise EntityNotFoundError("Account not found or access denied")
 
         # 1. Total consolidated balance
-        balance_stmt = select(func.coalesce(func.sum(FinancialAccount.balance_cents), 0)).where(
+        balance_stmt = select(
+            func.coalesce(func.sum(FinancialAccount.balance_cents), 0)
+        ).where(
             FinancialAccount.user_id == user_id,
             FinancialAccount.is_active.is_(True),
         )
@@ -104,17 +106,23 @@ class DashboardService:
                     expense = int(row_sum)
             return income, expense
 
-        month_income, month_expense = await _calculate_month_totals(start_date, end_date)
+        month_income, month_expense = await _calculate_month_totals(
+            start_date, end_date
+        )
         prev_income, prev_expense = await _calculate_month_totals(prev_start, prev_end)
 
         # 4. Growth calculations
         income_growth_pct: float | None = None
         if prev_income > 0:
-            income_growth_pct = round(((month_income - prev_income) / prev_income) * 100, 1)
+            income_growth_pct = round(
+                ((month_income - prev_income) / prev_income) * 100, 1
+            )
 
         expense_growth_pct: float | None = None
         if prev_expense > 0:
-            expense_growth_pct = round(((month_expense - prev_expense) / prev_expense) * 100, 1)
+            expense_growth_pct = round(
+                ((month_expense - prev_expense) / prev_expense) * 100, 1
+            )
 
         month_net_cents = month_income - month_expense
 
@@ -122,12 +130,20 @@ class DashboardService:
         cat_stmt = (
             select(
                 Transaction.category_id,
-                func.coalesce(TransactionCategory.name, "Sem Categoria").label("cat_name"),
-                func.coalesce(TransactionCategory.icon, "help-circle").label("cat_icon"),
+                func.coalesce(TransactionCategory.name, "Sem Categoria").label(
+                    "cat_name"
+                ),
+                func.coalesce(TransactionCategory.icon, "help-circle").label(
+                    "cat_icon"
+                ),
                 func.coalesce(TransactionCategory.color, "#6B7280").label("cat_color"),
-                func.coalesce(func.sum(Transaction.amount_cents), 0).label("total_spent"),
+                func.coalesce(func.sum(Transaction.amount_cents), 0).label(
+                    "total_spent"
+                ),
             )
-            .outerjoin(TransactionCategory, Transaction.category_id == TransactionCategory.id)
+            .outerjoin(
+                TransactionCategory, Transaction.category_id == TransactionCategory.id
+            )
             .where(
                 Transaction.user_id == user_id,
                 Transaction.status == TransactionStatus.CONFIRMED.value,
@@ -150,7 +166,11 @@ class DashboardService:
         spending_by_category: list[CategorySpendingSummary] = []
         for cat_id, cat_name, cat_icon, cat_color, total_spent in cat_rows:
             spent_cents = int(total_spent)
-            pct = round((spent_cents / month_expense) * 100, 1) if month_expense > 0 else 0.0
+            pct = (
+                round((spent_cents / month_expense) * 100, 1)
+                if month_expense > 0
+                else 0.0
+            )
             spending_by_category.append(
                 CategorySpendingSummary(
                     category_id=cat_id,
@@ -167,7 +187,9 @@ class DashboardService:
             select(Transaction, FinancialAccount.name)
             .join(FinancialAccount, Transaction.account_id == FinancialAccount.id)
             .where(Transaction.user_id == user_id)
-            .order_by(Transaction.transaction_date.desc(), Transaction.created_at.desc())
+            .order_by(
+                Transaction.transaction_date.desc(), Transaction.created_at.desc()
+            )
             .limit(5)
         )
         if account_id is not None:
@@ -198,7 +220,6 @@ class DashboardService:
                     transaction_date=tx.transaction_date,
                 )
             )
-
 
         return DashboardResponse(
             total_balance_cents=total_balance_cents,

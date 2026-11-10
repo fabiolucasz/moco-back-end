@@ -50,19 +50,34 @@ class TransactionCreate(BaseModel):
     account_id: uuid.UUID | None = None
     destination_account_id: uuid.UUID | None = None
     category_id: uuid.UUID | None = None
-    amount_cents: int = Field(..., gt=0, description="Amount in cents, must be positive")
+    amount_cents: int = Field(
+        ..., gt=0, description="Amount in cents, must be positive"
+    )
     type: TransactionType = TransactionType.EXPENSE
     description: str = Field(..., min_length=1, max_length=255)
     transaction_date: date = Field(default_factory=date.today)
     settlement_date: date | None = None
     status: TransactionStatus = TransactionStatus.CONFIRMED
     notes: str | None = None
-    recurrence_type: str | None = Field(default=None, description="Type of recurrence: daily, weekly, monthly, yearly, installments")
-    recurrence_interval: int | None = Field(default=None, description="Interval between occurrences")
-    recurrence_count: int | None = Field(default=None, description="Number of occurrences")
-    recurrence_end_date: date | None = Field(default=None, description="End date for recurrence")
-    installment_number: int | None = Field(default=None, description="Current installment number")
-    total_installments: int | None = Field(default=None, description="Total number of installments")
+    recurrence_type: str | None = Field(
+        default=None,
+        description="Type of recurrence: daily, weekly, monthly, yearly, installments",
+    )
+    recurrence_interval: int | None = Field(
+        default=None, description="Interval between occurrences"
+    )
+    recurrence_count: int | None = Field(
+        default=None, description="Number of occurrences"
+    )
+    recurrence_end_date: date | None = Field(
+        default=None, description="End date for recurrence"
+    )
+    installment_number: int | None = Field(
+        default=None, description="Current installment number"
+    )
+    total_installments: int | None = Field(
+        default=None, description="Total number of installments"
+    )
 
     @model_validator(mode="after")
     def validate_transfer_accounts(self) -> "TransactionCreate":
@@ -91,7 +106,9 @@ class TransactionUpdate(BaseModel):
     recurrence_end_date: date | None = None
     installment_number: int | None = None
     total_installments: int | None = None
-    edit_scope: str | None = Field(default=None, description="Edit scope: single, future, all")
+    edit_scope: str | None = Field(
+        default=None, description="Edit scope: single, future, all"
+    )
 
 
 class TransactionResponse(BaseModel):

@@ -1,6 +1,5 @@
 import uuid
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -10,10 +9,18 @@ from src.modules.accounts.domain.enums import AccountType
 class AccountCreate(BaseModel):
     """Schema for creating a financial account or physical cash wallet."""
 
-    name: str = Field(..., min_length=1, max_length=100, description="Account or wallet name")
-    account_type: AccountType = Field(default=AccountType.CHECKING, description="Account type")
-    initial_balance_cents: int = Field(default=0, description="Initial balance in cents")
-    currency: str = Field(default="BRL", max_length=3, description="ISO 4217 currency code")
+    name: str = Field(
+        ..., min_length=1, max_length=100, description="Account or wallet name"
+    )
+    account_type: AccountType = Field(
+        default=AccountType.CHECKING, description="Account type"
+    )
+    initial_balance_cents: int = Field(
+        default=0, description="Initial balance in cents"
+    )
+    currency: str = Field(
+        default="BRL", max_length=3, description="ISO 4217 currency code"
+    )
     color: str = Field(default="#0066FF", max_length=7, description="HEX color tag")
 
 

@@ -44,7 +44,9 @@ async def login(
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> TokenResponse:
     """Authenticates user credentials and returns JWT access and refresh tokens."""
-    user, access_token, refresh_token = await AuthService.authenticate_local(db, login_in)
+    user, access_token, refresh_token = await AuthService.authenticate_local(
+        db, login_in
+    )
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -64,7 +66,9 @@ async def refresh_token(
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> TokenResponse:
     """Rotates refresh token and issues a new token pair."""
-    new_access, new_refresh, user = await AuthService.refresh_session(db, refresh_in.refresh_token)
+    new_access, new_refresh, user = await AuthService.refresh_session(
+        db, refresh_in.refresh_token
+    )
     return TokenResponse(
         access_token=new_access,
         refresh_token=new_refresh,

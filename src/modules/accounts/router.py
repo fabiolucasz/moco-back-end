@@ -76,7 +76,9 @@ async def update_account(
     db: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> FinancialAccount:
     """Updates account fields verifying user ownership."""
-    return await AccountService.update_account(db, current_user.id, account_id, update_in)
+    return await AccountService.update_account(
+        db, current_user.id, account_id, update_in
+    )
 
 
 @router.delete(

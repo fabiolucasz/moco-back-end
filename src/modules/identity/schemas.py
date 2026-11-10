@@ -8,7 +8,9 @@ class UserCreate(BaseModel):
     """Schema for user registration."""
 
     email: EmailStr
-    password: str = Field(..., min_length=8, description="Minimum 8 characters password")
+    password: str = Field(
+        ..., min_length=8, description="Minimum 8 characters password"
+    )
     full_name: str = Field(..., min_length=2, max_length=255, description="Full name")
 
 
