@@ -43,7 +43,7 @@ jobs:
         ALGORITHM: HS256
         ACCESS_TOKEN_EXPIRE_MINUTES: 30
         ENVIRONMENT: dev
-      run: uv run pytest src/tests/ -v
+      run: uv run pytest tests/ -v
     
     - name: Upload coverage reports
       if: always()
