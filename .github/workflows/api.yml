@@ -29,7 +29,7 @@ jobs:
 
     - name: Set up environment variables
       run: |
-        echo "DATABASE_URL=sqlite:///./test.db" >> $GITHUB_ENV
+        echo "DATABASE_URL=sqlite+aiosqlite:///./test.db" >> $GITHUB_ENV
         echo "SECRET_KEY=test-secret-key-for-testing" >> $GITHUB_ENV
         echo "ALGORITHM=HS256" >> $GITHUB_ENV
         echo "ACCESS_TOKEN_EXPIRE_MINUTES=30" >> $GITHUB_ENV
@@ -38,11 +38,11 @@ jobs:
     
     - name: Run tests
       env:
-        DATABASE_URL: sqlite:///./test.db
+        DATABASE_URL: sqlite+aiosqlite:///./test.db
         SECRET_KEY: test-secret-key-for-testing
         ALGORITHM: HS256
         ACCESS_TOKEN_EXPIRE_MINUTES: 30
-        ENVIRONMENT: dev
+        ENVIRONMENT: development
       run: uv run pytest tests/ -v
     
     - name: Upload coverage reports
