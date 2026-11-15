@@ -37,10 +37,12 @@ usermod -aG docker ubuntu
 
 # 3. Clonar o repositório do GitHub na pasta /app
 if [ -d "/app" ]; then
-  rm -rf /app
+  cd /app
+  git pull origin main
+else
+  git clone https://github.com/fabiolucasz/moco-back-end.git /app
+  chown -R ubuntu:ubuntu /app
 fi
-git clone https://github.com/fabiolucasz/moco-back-end.git /app
-chown -R ubuntu:ubuntu /app
 
 # 4. Entrar na pasta do projeto e criar o arquivo .env
 cd /app
